@@ -1,4 +1,9 @@
-from tensorflow_tools.network import Network
+try:
+    from tensorflow_tools.network import Network
+except ImportError:
+    class Network:
+        pass
+
 import tensorflow as tf
 
 
