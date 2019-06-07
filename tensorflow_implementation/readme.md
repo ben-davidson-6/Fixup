@@ -1,0 +1,23 @@
+# Resnets with fixup initialisation
+
+Tensorflow implementation of [preactivation resnets](https://arxiv.org/pdf/1603.05027.pdf) with [fixup intialisation](https://arxiv.org/abs/1901.09321). Resnets can be created by defining the recurrent blocks, their depth, and their number of bottleneck units. 
+
+## To use the network
+```python
+from resnet_fixup import FixUpResnet
+import tensorflow as tf
+
+# define a placeholder or dataset iterator
+image = tf.placeholder(tf.float32, [None, 32, 32, 3])
+resnet = FixUpResnet(classes=10)
+resnet.add_block(units=3, depth=64)
+resnet.add_block(4, 128)
+resnet.add_block(6, 256)
+resnet.add_block(3, 512)
+
+logits = resnet.build_network(image)
+```
+
+## Training results
+
+- Training without mixup with ResNet50 91.8% on cifar10, 
