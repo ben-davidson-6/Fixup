@@ -30,7 +30,7 @@ params['momentum'] = 0.9
 params['bias_reduction'] = 0.1
 params['epochs_to_reduce_at'] = [80, 140]
 params['initial_learning_rate'] = 0.1
-params['reduction_factor'] = 0.1
+params['epoch_reduction_factor'] = 0.1
 pprint(params)
 
 run_config = estimator.RunConfig(

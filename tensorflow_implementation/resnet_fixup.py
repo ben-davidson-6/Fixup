@@ -119,7 +119,7 @@ class FixUpResnet():
         reduce_learning_rate_at = params['epochs_to_reduce_at']
         init_learn = params['initial_learning_rate']
         steps_per_epoch = params['steps_per_epoch']
-        reduction_factor = params['reduction_factor']
+        reduction_factor = params['epoch_reduction_factor']
         global_step = tf.train.get_or_create_global_step()
 
         reduce_learning_rate_at = [x * steps_per_epoch for x in reduce_learning_rate_at]
