@@ -21,6 +21,7 @@ val_examples = 10000
 train_examples = 50000
 batch_size = 256
 throttle_mins = 10
+model_dir = 'C:\\Users\\Ben\\PycharmProjects\\Fixup\\tensorflow_implementation\\models\\test'
 
 params = dict()
 params['steps_per_epoch'] = train_examples // batch_size
@@ -40,7 +41,7 @@ run_config = estimator.RunConfig(
 )
 
 fixup_estimator = estimator.Estimator(
-    model_dir='C:\\Users\\Ben\\PycharmProjects\\Fixup\\tensorflow_implementation\\models\\test',
+    model_dir=model_dir,
     model_fn=model.model_fn,
     params=params,
     config=run_config)
