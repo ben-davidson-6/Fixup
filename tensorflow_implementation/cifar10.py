@@ -3,10 +3,15 @@ import tensorflow as tf
 
 class CIFAR10():
 
+    def __init__(self, mixup_val, batch_size):
+        self.mixup_val = mixup_val
+        self.batch_size = batch_size
+
     def neccessary_processing(self, image, label):
         image = image/255
         image -= tf.constant([0.4914, 0.4822, 0.4465])[None, None]
         image /= tf.constant([0.2023, 0.1994, 0.2010])[None, None]
+        label = tf.one_hot(label, 10, dtype=tf.float32)
         return image, label
 
     def augmentations(self, image, label):
@@ -28,12 +33,22 @@ class CIFAR10():
                 yield image, label[0]
         return gen
 
+    def mixup(self, images, labels):
+        beta = tf.distributions.Beta(self.mixup_val, self.mixup_val)
+        images_reversed = tf.reverse(images, [0])
+        labels_reversed = tf.reverse(labels, [0])
+        lambdas = beta.sample(self.batch_size)
+        images = lambdas[:, None, None, None]*images + (1 - lambdas[:, None, None, None])*images_reversed
+        labels = lambdas[:, None]*labels + (1 - lambdas[:, None])*labels_reversed
+        return images, labels
+
     def build_training_data(self):
         gen = self.train_generator()
         ds = tf.data.Dataset.from_generator(gen, (tf.float32, tf.int32), ((32, 32, 3), ()))
-        ds = ds.shuffle(1000).repeat()
+        ds = ds.shuffle(5000).repeat()
         ds = ds.map(lambda im, l: self.augmentations(*self.neccessary_processing(im, l)), num_parallel_calls=4)
-        ds = ds.batch(256)
+        ds = ds.batch(self.batch_size)
+        ds = ds.map(self.mixup)
         ds = ds.prefetch(1)
         return ds
 
@@ -49,24 +64,6 @@ class CIFAR10():
         ds = tf.data.Dataset.from_generator(gen, (tf.float32, tf.int32), ((32, 32, 3), ()))
         ds = ds.shuffle(1000)
         ds = ds.map(self.neccessary_processing, num_parallel_calls=4)
-        ds = ds.batch(256)
+        ds = ds.batch(self.batch_size)
         ds = ds.prefetch(1)
         return ds
-
-    def build_pipeline(self):
-        train_dataset = self.build_training_data()
-        val_dataset = self.build_validation_data()
-        self.add_tf_dataset('training', train_dataset)
-        self.add_tf_dataset('validation', val_dataset)
-        image, label = self.iterator.get_next()
-        self.add_gettable_tensor('images', image)
-        self.add_gettable_tensor('labels', label)
-
-    def is_training_set(self, dataset_name):
-        return 'training' in dataset_name
-
-
-if __name__ == '__main__':
-    # (x_train, y_train), (x_test, y_test) = tf.keras.datasets.cifar10.load_data()
-    # print(x_train[0])
-    pass

@@ -67,8 +67,7 @@ class FixUpResnet():
     def eval_spec(self, loss, predictions, labels, params):
         # Define the metrics:
         metrics_dict = {
-            'Accuracy': tf.metrics.accuracy(tf.argmax(predictions, axis=-1), labels),
-            'Average Loss': tf.metrics.mean(loss)}
+            'Accuracy': tf.metrics.accuracy(tf.argmax(predictions, axis=-1), tf.argmax(labels, axis=-1))}
 
         # return eval spec
         return estimator.EstimatorSpec(
@@ -293,6 +292,6 @@ class FixUpResnet():
 
     def loss(self, logits, labels):
         return tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-            labels=tf.one_hot(labels, self.classes, dtype=tf.float32),
+            labels=labels,
             logits=logits,
         )) + FixUpResnet._weight_decay()
