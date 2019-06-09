@@ -17,9 +17,19 @@ class FixUpResnet():
 
     def build_network(self, images):
         net = images
+        # 3x3 conv c with relu
+        # relu(net*c + b)
         net = self.pre_residual_blocks(net)
+
+        # Build each residual block, from the
+        # provided configuration, and stack them together
         net = self.block_graph(net)
+
+        # remove any spatial dimensions leftover by average
+        # pooling
         net = tf.reduce_mean(net, [1, 2], keepdims=True)
+
+        # push through fully connected layer and get softmax
         logits = self.fc_layer(net)
         predictions = tf.nn.softmax(logits, axis=1)
         return logits, predictions
