@@ -1,8 +1,7 @@
-from tensorflow_tools.dataset import Dataset
 import tensorflow as tf
 
 
-class CIFAR10(Dataset):
+class CIFAR10():
 
     def neccessary_processing(self, image, label):
         image = image/255
@@ -14,8 +13,8 @@ class CIFAR10(Dataset):
         # image augmentations
         image = tf.image.random_flip_left_right(image)
         padding = tf.constant([
-            [4, 4],
-            [4, 4],
+            [6, 6],
+            [6, 6],
             [0, 0],
         ])
         image = tf.pad(image, padding)
@@ -32,7 +31,7 @@ class CIFAR10(Dataset):
     def build_training_data(self):
         gen = self.train_generator()
         ds = tf.data.Dataset.from_generator(gen, (tf.float32, tf.int32), ((32, 32, 3), ()))
-        ds = ds.shuffle(1000)
+        ds = ds.shuffle(1000).repeat()
         ds = ds.map(lambda im, l: self.augmentations(*self.neccessary_processing(im, l)), num_parallel_calls=4)
         ds = ds.batch(256)
         ds = ds.prefetch(1)

@@ -11,9 +11,9 @@ import tensorflow as tf
 image = tf.placeholder(tf.float32, [None, 32, 32, 3])
 resnet = FixUpResnet(classes=10)
 resnet.add_block(units=3, depth=64)
-resnet.add_block(4, 128)
-resnet.add_block(6, 256)
-resnet.add_block(3, 512)
+resnet.add_block(units=4, depth=128)
+resnet.add_block(units=6, depth=256)
+resnet.add_block(units=3, depth=512)
 
 logits = resnet.build_network(image)
 ```

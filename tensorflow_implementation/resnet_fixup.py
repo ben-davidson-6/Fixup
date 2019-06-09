@@ -1,10 +1,5 @@
-try:
-    from tensorflow_tools.network import Network
-except ImportError:
-    class Network:
-        pass
-
 import tensorflow as tf
+import tensorflow.python.estimator.estimator_lib as estimator
 
 
 class Block:
@@ -14,12 +9,126 @@ class Block:
         self.starting_layer = starting_layer
 
 
-class FixUpResnet(Network):
+class FixUpResnet():
 
     def __init__(self, classes=10):
-        Network.__init__(self)
         self.blocks = []
         self.classes = classes
+
+    def build_network(self, images):
+        net = images
+        net = self.pre_residual_blocks(net)
+        net = self.block_graph(net)
+        net = tf.reduce_mean(net, [1, 2], keepdims=True)
+        logits = self.fc_layer(net)
+        predictions = tf.nn.softmax(logits, axis=1)
+        return logits, predictions
+
+    def model_fn(self, features, labels, mode, params):
+        logits, predictions = self.build_network(features)
+        if mode == estimator.ModeKeys.PREDICT:
+            return self.predict_spec(predictions, params)
+        loss = self.loss(logits, labels)
+        if mode == estimator.ModeKeys.TRAIN:
+            return self.train_spec(loss, params)
+        if mode == estimator.ModeKeys.EVAL:
+            return self.eval_spec(loss, predictions, labels, params)
+
+    #####################################################################
+    # Defining train/eval/predict for estimator
+    #####################################################################
+
+    def predict_spec(self, predictions, params):
+        named_predictions = {
+            'probabilites': predictions,
+            'top_1': tf.argmax(predictions, axis=1)
+        }
+        return estimator.EstimatorSpec(
+            estimator.ModeKeys.PREDICT,
+            predictions=named_predictions)
+
+    def train_spec(self, loss, params):
+        train_op = self._training_op(loss, params)
+        return estimator.EstimatorSpec(
+            estimator.ModeKeys.TRAIN,
+            loss=loss,
+            train_op=train_op)
+
+    def eval_spec(self, loss, predictions, labels, params):
+        # Define the metrics:
+        metrics_dict = {
+            'Accuracy': tf.metrics.accuracy(tf.argmax(predictions, axis=-1), labels),
+            'Average Loss': tf.metrics.mean(loss)}
+
+        # return eval spec
+        return estimator.EstimatorSpec(
+            estimator.ModeKeys.EVAL,
+            loss=loss,
+            eval_metric_ops=metrics_dict)
+
+    #####################################################################
+    # Helping setup the estimator
+    #####################################################################
+
+    def _split_variables_by_bias_scale(self):
+        all_vars = tf.trainable_variables()
+        normal_vars = [x for x in all_vars if ('fixup_bias' not in x.op.name and 'fixup_scale' not in x.op.name)]
+        scale_and_bias_vars = [x for x in all_vars if 'fixup_bias' in x.op.name or 'fixup_scale' in x.op.name]
+        return normal_vars, scale_and_bias_vars
+
+    def _training_op(self, loss, params):
+        normal_vars, scale_and_bias_vars = self._split_variables_by_bias_scale()
+        learning_rate = self._make_learning_rate(params)
+        tf.summary.scalar('learning_rate', learning_rate)
+        optimiser_normal = tf.train.MomentumOptimizer(
+            learning_rate,
+            momentum=params['momentum'])
+        optimiser_scale_and_bias = tf.train.MomentumOptimizer(
+            learning_rate * params['bias_reduction'],
+            momentum=params['momentum'])
+
+        grads = tf.gradients(loss, normal_vars + scale_and_bias_vars)
+        grads1 = grads[:len(normal_vars)]
+        grads2 = grads[len(normal_vars):]
+        tran_op_normal = optimiser_normal.apply_gradients(zip(grads1, normal_vars))
+        train_op_scale_bias = optimiser_scale_and_bias.apply_gradients(
+            zip(grads2, scale_and_bias_vars), global_step=tf.train.get_or_create_global_step())
+
+        train_op = tf.group(tran_op_normal, train_op_scale_bias)
+        return train_op
+
+    def _epoch_reduced_lr(self, learn, reduction_steps, global_step, reduce_factor):
+        if len(reduction_steps) == 1:
+            return tf.cond(
+                global_step < reduction_steps[0],
+                lambda: learn,
+                lambda: learn * reduce_factor
+            )
+        else:
+            return tf.cond(
+                global_step < reduction_steps[0],
+                lambda: learn,
+                lambda: self._epoch_reduced_lr(
+                    learn * reduce_factor,
+                    reduction_steps[1:],
+                    global_step,
+                    reduce_factor)
+            )
+
+    def _make_learning_rate(self, params):
+        reduce_learning_rate_at = params['epochs_to_reduce_at']
+        init_learn = params['initial_learning_rate']
+        steps_per_epoch = params['steps_per_epoch']
+        reduction_factor = params['reduction_factor']
+        global_step = tf.train.get_or_create_global_step()
+
+        reduce_learning_rate_at = [x * steps_per_epoch for x in reduce_learning_rate_at]
+        learn = tf.constant(init_learn)
+        return self._epoch_reduced_lr(learn, reduce_learning_rate_at, global_step, reduction_factor)
+
+    #####################################################################
+    # Build the network
+    #####################################################################
 
     def number_of_residual_layers(self):
         starting_layer = 0
@@ -163,18 +272,6 @@ class FixUpResnet(Network):
         net = tf.nn.conv2d(net, w, [1, 1, 1, 1], 'VALID')
         return net[:, 0, 0, :]
 
-    def build_network(self, inputs, **kwargs):
-        if type(inputs) == dict:
-            net = inputs['images']
-        else:
-            net = inputs
-        net = self.pre_residual_blocks(net)
-        net = self.block_graph(net)
-        net = tf.reduce_mean(net, [1, 2], keepdims=True)
-        net = self.fc_layer(net)
-        tf.identity(net, name='logits')
-        return net
-
     @staticmethod
     def _weight_decay():
         vars = tf.trainable_variables()
@@ -184,12 +281,8 @@ class FixUpResnet(Network):
         l2_loss = tf.add_n(non_bias_vars)/len(non_bias_vars) * 0.0001
         return l2_loss
 
-    @staticmethod
-    def loss():
-        g = tf.get_default_graph()
-        logits = g.get_tensor_by_name('logits:0')
-        labels = g.get_tensor_by_name('labels:0')
+    def loss(self, logits, labels):
         return tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(
-            labels=tf.one_hot(labels, 10, dtype=tf.float32),
+            labels=tf.one_hot(labels, self.classes, dtype=tf.float32),
             logits=logits,
         )) + FixUpResnet._weight_decay()
