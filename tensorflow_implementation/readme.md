@@ -15,7 +15,7 @@ resnet.add_block(units=4, depth=128)
 resnet.add_block(units=6, depth=256)
 resnet.add_block(units=3, depth=512)
 
-logits = resnet.build_network(image)
+logits, predictions = resnet.build_network(image)
 ```
 
 ## Training results
