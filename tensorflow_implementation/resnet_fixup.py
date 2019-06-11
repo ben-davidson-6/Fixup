@@ -1,5 +1,5 @@
 import tensorflow as tf
-import tensorflow.python.estimator.estimator_lib as estimator
+import tensorflow.estimator as estimator
 
 
 class Block:

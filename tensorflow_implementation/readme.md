@@ -20,4 +20,4 @@ logits, predictions = resnet.build_network(image)
 
 ## Training results
 
-- Training without mixup with ResNet50 91.8% on cifar10, 
+- Training ResNet50 with mixup gives 6.5% validation error

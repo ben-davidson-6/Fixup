@@ -1,9 +1,9 @@
-import tensorflow as tf
-from tensorflow_implementation.resnet_fixup import FixUpResnet
-from tensorflow_implementation.cifar10 import CIFAR10
-import tensorflow.python.estimator.estimator_lib as estimator
+import os
+os.environ['CUDA_VISIBLE_DEVICES'] = "0"
+from resnet_fixup import FixUpResnet
+from cifar10 import CIFAR10
 from pprint import pprint
-
+import tensorflow.estimator as estimator
 
 
 
@@ -15,12 +15,12 @@ model.add_block(6, 256)
 model.add_block(3, 512)
 
 # define parameters used
-epochs_to_train = 200
+epochs_to_train = 400
 val_examples = 10000
 train_examples = 50000
 batch_size = 256
 throttle_mins = 10
-model_dir = 'C:\\Users\\Ben\\PycharmProjects\\Fixup\\tensorflow_implementation\\models\\cifar10Mixup'
+model_dir = '/datadrive/tensorflow_models/cifar10Fixup'
 
 params = dict()
 params['batch_size'] = batch_size
@@ -29,7 +29,7 @@ params['total_steps_train'] = params['steps_per_epoch'] * epochs_to_train
 params['throttle_eval'] = throttle_mins * 60
 params['momentum'] = 0.9
 params['bias_reduction'] = 0.1
-params['epochs_to_reduce_at'] = [40, 120]
+params['epochs_to_reduce_at'] = [150, 300]
 params['initial_learning_rate'] = 0.1
 params['epoch_reduction_factor'] = 0.1
 params['mixup_val'] = 0.7
@@ -43,7 +43,7 @@ cifar_data = CIFAR10(batch_size=params['batch_size'], mixup_val=params['mixup_va
 run_config = estimator.RunConfig(
     save_checkpoints_steps=params['steps_per_epoch'],
     save_summary_steps=500,
-    keep_checkpoint_max=5
+    keep_checkpoint_max=10
 )
 
 fixup_estimator = estimator.Estimator(
