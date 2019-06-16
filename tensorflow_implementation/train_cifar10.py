@@ -1,14 +1,11 @@
 import os
-os.environ['CUDA_VISIBLE_DEVICES'] = "0"
-from resnet_fixup import FixUpResnet
-from cifar10 import CIFAR10
+from cifar_10 import CIFAR10Dataset, CIFAR10Model
 from pprint import pprint
 import tensorflow.estimator as estimator
 
 
-
 # define the network
-model = FixUpResnet(classes=10)
+model = CIFAR10Model(classes=10)
 model.add_block(3, 64)
 model.add_block(4, 128)
 model.add_block(6, 256)
@@ -20,7 +17,7 @@ val_examples = 10000
 train_examples = 50000
 batch_size = 256
 throttle_mins = 10
-model_dir = '/datadrive/tensorflow_models/cifar10Fixup'
+model_dir = 'C:\\Users\\Ben\\PycharmProjects\\Fixup\\tensorflow_implementation\\models\\cifarT'
 
 params = dict()
 params['batch_size'] = batch_size
@@ -37,7 +34,7 @@ pprint(params)
 
 
 # get data loader
-cifar_data = CIFAR10(batch_size=params['batch_size'], mixup_val=params['mixup_val'])
+cifar_data = CIFAR10Dataset(batch_size=params['batch_size'], mixup_val=params['mixup_val'])
 
 
 run_config = estimator.RunConfig(

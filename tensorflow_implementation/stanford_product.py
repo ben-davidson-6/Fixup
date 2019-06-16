@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 
-class CIFAR10():
+class StanfordProduct():
 
     def __init__(self, mixup_val, batch_size):
         self.mixup_val = mixup_val
