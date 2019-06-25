@@ -184,11 +184,11 @@ def margin_loss(labels, embedding, beta, params):
         neg_inds = tf.where(tf.logical_not(positive_mask))
         pos_ds = tf.gather_nd(pairwise_distances, pos_inds)
         neg_ds = tf.gather_nd(pairwise_distances, neg_inds)
-        tf.summary.scalar(name='margin/' + NEGATIVE_LOSS, tensor=neg_loss/pairs)
-        tf.summary.scalar(name='margin/' + POSITIVE_LOSS, tensor=poss_loss/pairs)
-        tf.summary.scalar(name='margin/' + POSITIVE_DISTANCES, tensor=tf.reduce_mean(pos_ds))
-        tf.summary.scalar(name='margin/' + NEGATIVE_DISTANCES, tensor=tf.reduce_mean(neg_ds))
-        tf.summary.scalar(name='margin/' + 'beta', tensor=tf.reduce_mean(beta))
+        tf.summary.scalar('margin/' + NEGATIVE_LOSS, neg_loss/pairs)
+        tf.summary.scalar('margin/' + POSITIVE_LOSS, poss_loss/pairs)
+        tf.summary.histogram('margin/' + POSITIVE_DISTANCES, pos_ds)
+        tf.summary.histogram('margin/' + NEGATIVE_DISTANCES, neg_ds)
+        tf.summary.scalar('margin/' + 'beta', tf.reduce_mean(beta))
 
     return loss
 

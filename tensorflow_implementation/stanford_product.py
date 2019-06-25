@@ -7,9 +7,10 @@ from random import shuffle
 import pandas as pd
 import os
 import numpy as np
+from random import sample
 
-
-data_folder = 'C:\\Users\\Ben\\PycharmProjects\\Fixup\\Stanford_Online_Products'
+# data_folder = 'C:\\Users\\Ben\\PycharmProjects\\Fixup\\Stanford_Online_Products'
+data_folder = '/content/Stanford_Online_Products'
 pickle_path = os.path.join(data_folder, 'df.pickle')
 
 
@@ -35,20 +36,48 @@ def preprocess():
 
 class StanfordProductData():
 
-    def __init__(self, batch_size,):
-        self.batch_size = batch_size
+    classes = list(range(12))
+
+    def __init__(self, identities, examples, steps_per_train_epoch, steps_per_val_epoch, size):
+        self.batch_size = identities*examples
         df = pd.read_pickle(pickle_path)
         self.train_df = df[df['train']]
         self.val_df = df[~df['train']]
+        self.identities = identities
+        self.examples = examples
+        self.steps_per_train_epoch = steps_per_train_epoch
+        self.steps_per_val_epoch = steps_per_val_epoch
+        self.size = size
+
+    def data_generator(self, train=False):
+        if train:
+            df = self.train_df
+            steps = self.steps_per_train_epoch
+        else:
+            df = self.val_df
+            steps = self.steps_per_val_epoch
+
+        df = df.sample(frac=1)
+        df = df.groupby('labels')
+        paths, labels = [], []
+        for _ in range(steps):
+            identities = sample(StanfordProductData.classes, self.identities)
+            for ident in identities:
+                ident_df = df.get_group(ident).sample(n=self.examples)
+                paths += ident_df['path'].tolist()
+                labels += ident_df['labels'].tolist()
+
+        for p, l in zip(paths, labels):
+            yield p, l
 
     def neccessary_processing(self, path, label):
         raw_f = tf.read_file(path)
         image = tf.image.decode_jpeg(raw_f, channels=3)
-        image = image/255
-        image -= tf.constant([0.4914, 0.4822, 0.4465])[None, None]
-        image /= tf.constant([0.2023, 0.1994, 0.2010])[None, None]
-        image = tf.image.resize_bilinear(image[None], tf.constant((64, 64)))[0]
-
+        image = tf.image.per_image_standardization(image)
+        print(image)
+        image = tf.image.resize_bilinear(image[None], tf.constant((256, 256)))[0]
+        image = tf.image.random_crop(image, tf.constant((self.size, self.size, 3)))
+        tf.summary.image('image', image[None])
         return image, label
 
     def augmentations(self, image, label):
@@ -56,20 +85,21 @@ class StanfordProductData():
         return image, label
 
     def build_training_data(self):
-        ds = tf.data.Dataset.from_tensor_slices(
-            (self.train_df['path'],
-            self.train_df['labels']))
-        ds = ds.shuffle(5000).repeat()
+        ds = tf.data.Dataset.from_generator(
+            lambda: self.data_generator(train=True),
+            (tf.string, tf.int32),
+            ((), ()))
+        ds = ds.repeat()
         ds = ds.map(lambda im, l: self.augmentations(*self.neccessary_processing(im, l)), num_parallel_calls=4)
         ds = ds.batch(self.batch_size)
         ds = ds.prefetch(1)
         return ds
 
     def build_validation_data(self):
-        ds = tf.data.Dataset.from_tensor_slices(
-            (self.val_df['path'],
-             self.val_df['labels']))
-        ds = ds.shuffle(5000)
+        ds = tf.data.Dataset.from_generator(
+            lambda: self.data_generator(train=False),
+            (tf.string, tf.int32),
+            ((), ()))
         ds = ds.map(self.neccessary_processing, num_parallel_calls=4)
         ds = ds.batch(self.batch_size)
         ds = ds.prefetch(1)
@@ -132,6 +162,53 @@ class CIFAR10Dataset():
         return ds
 
 
+class Mnist():
+
+    def __init__(self, batch_size):
+        self.batch_size = batch_size
+
+    def neccessary_processing(self, image, label):
+        image = tf.reshape(image, [28, 28, 1])
+        image = tf.image.grayscale_to_rgb(image)
+        image = image/255
+        image -= tf.constant([0.5])[None, None]
+        image /= tf.constant([0.25])[None, None]
+        return image, label
+
+    def train_generator(self):
+        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+        def gen():
+            for image, label in zip(x_train, y_train):
+                yield image, label
+        return gen
+
+    def build_training_data(self):
+        gen = self.train_generator()
+        ds = tf.data.Dataset.from_generator(gen, (tf.float32, tf.int32), ((28, 28), ()))
+        ds = ds.shuffle(5000).repeat()
+        ds = ds.map(self.neccessary_processing, num_parallel_calls=4)
+        ds = ds.batch(self.batch_size)
+        ds = ds.prefetch(1)
+        return ds
+
+    def validation_generator(self):
+        (x_train, y_train), (x_test, y_test) = tf.keras.datasets.mnist.load_data()
+        def gen():
+            for image, label in zip(x_test, y_test):
+                yield image, label
+        return gen
+
+    def build_validation_data(self):
+        gen = self.validation_generator()
+        ds = tf.data.Dataset.from_generator(gen, (tf.float32, tf.int32), ((28, 28), ()))
+        ds = ds.shuffle(1000)
+        ds = ds.map(self.neccessary_processing, num_parallel_calls=4)
+        ds = ds.batch(self.batch_size)
+        ds = ds.prefetch(1)
+        return ds
+
+
+
 class StanfordModel(FixUpResnet):
 
     def embedding_net(self, features, params):
@@ -140,10 +217,12 @@ class StanfordModel(FixUpResnet):
         return net
 
     def model_fn(self, features, labels, mode, params):
+        tf.summary.image('image', features)
         endpoints = self.build_network(features)
         net = endpoints['feature'][:, 0, 0, :]
         embedding = self.embedding_net(net, params)
-        betas = tf.get_variable('beta_margins', initializer=params['betas']*tf.ones([12]))
+
+        betas = tf.get_variable('beta_margins', initializer=params['beta_0']*tf.ones([12]))
         if mode == estimator.ModeKeys.PREDICT:
             return self.predict_spec(embedding)
         loss = StanfordModel.loss(embedding, labels, betas, params)
@@ -270,6 +349,11 @@ class StanfordModel(FixUpResnet):
 
 
 if __name__ == '__main__':
-    s = StanfordProductData(1)
-    print(s.train_df.shape)
-    print(s.val_df.shape)
+    df = pd.read_pickle(pickle_path)
+    import matplotlib.pyplot as plt
+    import imageio
+    from cv2 import resize
+    for _, r in df.iterrows():
+        plt.imshow(resize(imageio.imread(r['path']), (64, 64)))
+        plt.suptitle(r['class_name'] + str(r['labels']))
+        plt.show()

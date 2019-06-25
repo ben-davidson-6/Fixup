@@ -20,4 +20,4 @@ logits, predictions = resnet.build_network(image)
 
 ## Training results
 
-- Training ResNet50 with mixup gives 6.5% validation error
+- Training ResNet50 with mixup gives 6.5% validation error after 200 epochs
