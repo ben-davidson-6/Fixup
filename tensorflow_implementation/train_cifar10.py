@@ -1,6 +1,6 @@
-import os
 from cifar_10 import CIFAR10Dataset, CIFAR10Model
 from pprint import pprint
+import os
 import tensorflow.estimator as estimator
 
 
@@ -17,7 +17,10 @@ val_examples = 10000
 train_examples = 50000
 batch_size = 256
 throttle_mins = 10
-model_dir = 'C:\\Users\\Ben\\PycharmProjects\\Fixup\\tensorflow_implementation\\models\\cifarT'
+
+model_name = 'cifar_10'
+model_dir = '/home/ben/tensorflow_models/'
+model_dir = os.path.join(model_dir, model_name)
 
 params = dict()
 params['batch_size'] = batch_size

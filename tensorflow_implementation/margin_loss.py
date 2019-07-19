@@ -8,9 +8,8 @@ NEGATIVE_LOSS = 'negative_loss'
 
 
 def pairwise_distance(tensor_0):
-    g = tf.reduce_sum(tf.square(tensor_0), axis=1, keepdims=True)
     G = tf.matmul(tensor_0, tf.matrix_transpose(tensor_0))
-    d = g - 2. * G + tf.transpose(g)
+    d = tf.diag_part(G)[:, None] - 2. * G + tf.diag_part(G)[None, :]
     d = tf.sqrt(tf.maximum(d, 0.05))
     return d
 
